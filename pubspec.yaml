@@ -38,6 +38,9 @@ dependencies:
   get: ^4.6.6
   flutter_chat_ui: ^1.6.8
   flutter_chat_types: ^3.6.2
+  file_picker: ^10.3.2
+  uuid: ^4.5.1
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -55,6 +58,9 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  assets:
+    - .env
+
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

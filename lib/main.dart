@@ -3,13 +3,18 @@ import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/chat_screen.dart';
 import 'screens/users_screen.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-void main() async {
+
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env"); // explicitly mention fileZz
   await Supabase.initialize(
-    url: 'https://cbcceiglkhdsxdptjqdu.supabase.co', // TODO: Replace with your Supabase project URL
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNiY2NlaWdsa2hkc3hkcHRqcWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYyMjQzOTEsImV4cCI6MjA3MTgwMDM5MX0.TEbq_pELcCqHPQ5ZMIgZCFp6kIr6RzZ0BBqH1ZQEAVs', // TODO: Replace with your Supabase anon key
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
+
   runApp(const MyApp());
 }
 

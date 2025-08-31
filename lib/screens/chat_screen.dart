@@ -80,22 +80,67 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Text(widget.user['name'] ?? widget.user['email'] ?? 'Chat'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _handleLogout,
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.logout),
+          //   onPressed: _handleLogout,
+          // ),
         ],
       ),
 
       body: Obx(() => controller.isLoading.value
           ? const Center(child: CircularProgressIndicator())
-          : Chat(
-              messages: controller.messages.reversed.toList(),
-              onSendPressed: (partial) =>
-                  controller.sendMessage(partial.text, chatUser),
-              user: chatUser,
-              showUserAvatars: false,
-              showUserNames: true,
+          : Column(
+              children: [
+                // Upload progress bar
+                Obx(() {
+                  final progress = controller.uploadProgress.value;
+                  if (progress > 0 && progress < 1) {
+                    return Column(
+                      children: [
+                        LinearProgressIndicator(value: progress),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text('${(progress * 100).toStringAsFixed(0)}% uploading...'),
+                        ),
+                      ],
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }),
+                Expanded(
+
+                  child: Chat(
+
+                    messages: controller.messages.reversed.toList(),
+                    onSendPressed: (partial) {
+                      controller.sendMessage(partial.text, chatUser);
+
+                      // for(int i=0;i<partial.text.length;i++){
+                      //
+                      // }
+                    }
+                       ,
+                    user: chatUser,
+                    showUserAvatars: false,
+                    showUserNames: true,
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.image),
+                      tooltip: 'Send Image',
+                      onPressed: () => controller.sendMediaMessage(context, chatUser, mediaType: 'image'),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.videocam),
+                      tooltip: 'Send Video',
+                      onPressed: () => controller.sendMediaMessage(context, chatUser, mediaType: 'video'),
+                    ),
+                  ],
+                ),
+              ],
             )),
     );
   }

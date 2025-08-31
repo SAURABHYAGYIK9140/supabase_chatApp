@@ -1,16 +1,23 @@
 import 'dart:async';
-
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart'; // for kIsWeb
+import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 
+
 class ChatController extends GetxController {
   final SupabaseClient supabase = Supabase.instance.client;
-  final RxList<types.TextMessage> messages = <types.TextMessage>[].obs;
+  final RxList<types.Message> messages = <types.Message>[].obs;
   String? currentConversationId;
   RealtimeChannel? _messageChannel;
   StreamSubscription<dynamic>? _realtimeSub;
   var isLoading = false.obs;
+  var uploadProgress = 0.0.obs;
 
   @override
   void onInit() {
@@ -78,6 +85,73 @@ class ChatController extends GetxController {
       'created_at': DateTime.now().toIso8601String(),
     });
   }
+  Future<void> sendMediaMessage(BuildContext context, types.User user, {required String mediaType}) async {
+    if (currentConversationId == null) return;
+    final result = await FilePicker.platform.pickFiles(
+      type: mediaType == 'image'
+          ? FileType.image
+          : mediaType == 'video'
+              ? FileType.video
+              : FileType.any,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    final pickedFile = result.files.single;
+    final uniqueName = '${const Uuid().v4()}_${pickedFile.name}';
+    final storagePath = 'chat_media/$currentConversationId/$uniqueName';
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Uploading...'),
+        content: Row(
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(child: Text('Please wait while your file is uploading.')),
+          ],
+        ),
+      ),
+    );
+    try {
+      if (kIsWeb) {
+        if (pickedFile.bytes == null) {
+          Navigator.of(context).pop();
+          return;
+        }
+        await supabase.storage.from('chat-media').uploadBinary(
+          storagePath,
+          pickedFile.bytes!,
+          fileOptions: const FileOptions(upsert: true),
+        );
+      } else {
+        final file = File(pickedFile.path!);
+        await supabase.storage.from('chat-media').upload(
+          storagePath,
+          file,
+          fileOptions: const FileOptions(upsert: true),
+        );
+      }
+      final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
+      await supabase.from('messages').insert({
+        'conversation_id': currentConversationId,
+        'content': publicUrl,
+        'sender_id': user.id,
+        'created_at': DateTime.now().toIso8601String(),
+        'type': mediaType,
+      });
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload complete!')),
+      );
+    } catch (e) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: $e')),
+      );
+    }
+  }
 
   /// 3. Fetch messages for a conversation
   void fetchMessages(String conversationId) async {
@@ -87,7 +161,7 @@ class ChatController extends GetxController {
         .select()
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true);
-    messages.assignAll(response.map<types.TextMessage>((msg) => _fromMap(msg)).toList());
+    messages.assignAll(response.map<types.Message>((msg) => _fromMap(msg)).toList());
     currentConversationId = conversationId;
     subscribeToMessages(conversationId);
     isLoading.value = false;
@@ -129,13 +203,35 @@ class ChatController extends GetxController {
     return convos.map<Map<String, dynamic>>((e) => e['conversations']).toList();
   }
 
-  types.TextMessage _fromMap(Map<String, dynamic> map) {
-    return types.TextMessage(
-      id: map['id'].toString(),
-      author: types.User(id: map['sender_id'] ?? ''),
-      text: map['content'] ?? '',
-      createdAt: DateTime.parse(map['created_at']).millisecondsSinceEpoch,
-    );
+  types.Message _fromMap(Map<String, dynamic> map) {
+    final type = map['type'] ?? 'text';
+    if (type == 'image') {
+      return types.ImageMessage(
+        id: map['id'].toString(),
+        author: types.User(id: map['sender_id'] ?? ''),
+        name: 'Image',
+        size: 0,
+        uri: map['content'] ?? '',
+        createdAt: DateTime.parse(map['created_at']).millisecondsSinceEpoch,
+      );
+    } else if (type == 'video') {
+      return types.FileMessage(
+        id: map['id'].toString(),
+        author: types.User(id: map['sender_id'] ?? ''),
+        name: 'Video',
+        size: 0,
+        uri: map['content'] ?? '',
+        mimeType: 'video/mp4',
+        createdAt: DateTime.parse(map['created_at']).millisecondsSinceEpoch,
+      );
+    } else {
+      return types.TextMessage(
+        id: map['id'].toString(),
+        author: types.User(id: map['sender_id'] ?? ''),
+        text: map['content'] ?? '',
+        createdAt: DateTime.parse(map['created_at']).millisecondsSinceEpoch,
+      );
+    }
   }
 
   /// Save or update user info in `users` table
